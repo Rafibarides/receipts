@@ -1,0 +1,3 @@
+# Code.gs holds R2 credentials locally; it lives in Apps Script, not GitHub.
+Code.gs
+.DS_Store
