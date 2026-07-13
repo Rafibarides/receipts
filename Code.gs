@@ -106,6 +106,9 @@ function setup() {
       .setFontWeight('bold')
       .setFontColor('#ffffff')
       .setBackground('#274e13');
+    // flush() forces the batched writes to run NOW, so a typed-column error
+    // lands inside this catch instead of surfacing later in the function.
+    SpreadsheetApp.flush();
   } catch (e) {
     warnings.push('headers (' + e.message + ')');
   }
@@ -123,9 +126,15 @@ function setup() {
   const last = sh.getMaxRows() - 1;
   try {
     sh.getRange(2, 2, last, 1).setNumberFormat('yyyy-mm-dd');   // Date of purchase
-    sh.getRange(2, 6, last, 1).setNumberFormat('$#,##0.00');    // Purchase Amount
+    SpreadsheetApp.flush();
   } catch (e) {
-    warnings.push('number formats (typed/table columns handle this themselves)');
+    warnings.push('date format (typed/table column handles this itself)');
+  }
+  try {
+    sh.getRange(2, 6, last, 1).setNumberFormat('$#,##0.00');    // Purchase Amount
+    SpreadsheetApp.flush();
+  } catch (e) {
+    warnings.push('currency format (typed/table column handles this itself)');
   }
 
   // Hidden list tab (a range beats an inline list — no length limits, easy to edit)
@@ -144,6 +153,7 @@ function setup() {
       .setHelpText('Pick a category from the list.')
       .build();
     sh.getRange(2, 5, last, 1).setDataValidation(rule);
+    SpreadsheetApp.flush();
   } catch (e) {
     warnings.push('category dropdown (typed/table column blocked it)');
   }
