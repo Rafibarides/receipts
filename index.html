@@ -47,6 +47,45 @@
   .msg.ok { display: block; background: #e6f0e0; color: var(--green); }
   .msg.err { display: block; background: #f7e3e0; color: var(--alert); }
   .banner { display: none; margin: 0 0 20px; padding: 10px 12px; border-radius: 8px; background: #fdf3d7; color: #7a5a00; font-size: 14px; }
+
+  /* --- searchable category picker --- */
+  .cat-btn {
+    text-align: left; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 48px;
+  }
+  .cat-btn .placeholder { color: var(--muted); }
+  .cat-btn .chev { flex: none; color: var(--muted); font-size: 13px; }
+  .cat-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(28, 33, 24, .45);
+    display: none;
+  }
+  .cat-overlay.open { display: flex; align-items: flex-end; justify-content: center; }
+  .cat-panel {
+    background: var(--paper);
+    width: 100%; max-width: 520px;
+    max-height: 80vh; max-height: 80dvh;
+    border-radius: 16px 16px 0 0;
+    display: flex; flex-direction: column;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 600px) {
+    .cat-overlay.open { align-items: center; padding: 24px; }
+    .cat-panel { border-radius: 16px; max-height: 70vh; }
+  }
+  .cat-panel .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 10px; }
+  .cat-panel input[type=search] { margin-bottom: 8px; -webkit-appearance: none; appearance: none; }
+  .cat-list { overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0; padding: 0; list-style: none; flex: 1; }
+  .cat-list li {
+    padding: 13px 12px; border-radius: 8px; cursor: pointer;
+    border-bottom: 1px solid var(--line);
+  }
+  .cat-list li:last-child { border-bottom: none; }
+  .cat-list li:active, .cat-list li:hover { background: #e6f0e0; }
+  .cat-list li.selected { background: var(--green); color: #fff; }
+  .cat-list .empty { color: var(--muted); cursor: default; }
+  .cat-list .empty:hover, .cat-list .empty:active { background: none; }
 </style>
 </head>
 <body>
@@ -61,8 +100,11 @@
   <label for="amount">Purchase amount</label>
   <input id="amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00">
 
-  <label for="category">Category</label>
-  <select id="category"><option value="">Select a category</option></select>
+  <label id="categoryLabel">Category</label>
+  <button id="catBtn" class="cat-btn" type="button" aria-haspopup="listbox" aria-labelledby="categoryLabel">
+    <span id="catValue" class="placeholder">Select a category</span>
+    <span class="chev">&#9660;</span>
+  </button>
 
   <label for="description">Description</label>
   <textarea id="description" placeholder="What was bought, and where"></textarea>
@@ -75,37 +117,115 @@
   <div id="msg" class="msg"></div>
 </div>
 
+<!-- category picker sheet -->
+<div id="catOverlay" class="cat-overlay">
+  <div class="cat-panel" role="listbox" aria-label="Categories">
+    <div class="grab"></div>
+    <input id="catSearch" type="search" placeholder="Search categories&hellip;" autocomplete="off">
+    <ul id="catList" class="cat-list"></ul>
+  </div>
+</div>
+
 <script>
   /**
-   * Paste your Apps Script web-app URL here (Deploy > Manage deployments > Web app).
-   * It must end in /exec and be deployed with access: "Anyone".
+   * Apps Script web-app URL (Deploy > Manage deployments > Web app).
+   * Must end in /exec and be deployed with access: "Anyone".
    */
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwuk3OSacQ4-7eAQ5YfUDTfxZikvGcAwgSax5Z6iUOV5_OLY8EO1onLgmsdqrBFGacKhw/exec';
 
+  /* Fallback list, used only if the API can't be reached or is on an old version. */
+  const FALLBACK_CATEGORIES = [
+    'Restaurants', 'Takeout', 'Groceries (above normal spending)', 'Food delivery fees',
+    'Uber, Lyft, or taxis',
+    'Clothing', 'Shoes', 'Toiletries', 'Medication replacements', 'Household necessities',
+    'Bedding and towels', 'Kitchen supplies', 'Small appliances', 'Furniture (temporary housing)',
+    'Laundromat', 'Dry cleaning', 'Smoke or soot cleaning of clothing', 'Cleaning supplies',
+    'Storage unit', 'Moving company', 'Boxes and packing supplies', 'Delivery charges',
+    'Board-up service', 'Tarping', 'Water removal', 'Emergency electrician or plumber',
+    'Locksmith', 'Temporary fencing or security',
+    'Smoke remediation', 'Soot removal', 'Water-damage remediation', 'Mold prevention', 'Contents cleaning',
+    'Furniture (lost in fire)', 'Electronics (lost in fire)', 'Clothing (lost in fire)',
+    'Appliances (lost in fire)', 'Kitchenware (lost in fire)',
+    'Music or photography equipment (lost in fire)', 'Other destroyed belongings',
+    'Replacement identification', 'Passport or birth-certificate fees',
+    'Printing, postage, and shipping', 'Notary fees', 'Copies of records',
+    'Temporary school-related expenses',
+    'Temporary workspace', 'Replacement work equipment', 'Internet installation',
+    'Equipment rental', 'Lost or damaged business inventory'
+  ];
+
   const $ = id => document.getElementById(id);
   let photoData = null;
+  let categories = FALLBACK_CATEGORIES;
+  let selectedCategory = '';
 
   $('date').value = new Date().toISOString().slice(0, 10);
 
-  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SCRIPT_URL)) {
-    const b = $('banner');
-    b.style.display = 'block';
-    b.textContent = 'Not connected yet: paste your Apps Script /exec URL into SCRIPT_URL in index.html.';
-  }
-
-  /* Categories come from the Apps Script API so the sheet and the form always match. */
   fetch(SCRIPT_URL + '?action=categories')
     .then(r => r.json())
     .then(data => {
-      if (!data.ok) throw new Error(data.error || 'Bad response');
-      const sel = $('category');
-      data.categories.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        sel.appendChild(o);
-      });
+      // Old deployments may still return the "Group — Name" style; strip the prefix.
+      if (data.ok && data.categories && data.categories.length) {
+        categories = data.categories.map(c => c.split('—').pop().trim());
+      }
     })
-    .catch(() => show('err', 'Could not load categories. Check SCRIPT_URL and that the web app is deployed with access "Anyone".'));
+    .catch(() => { /* fallback list already in place */ })
+    .finally(renderCatList);
+
+  /* ---------------- searchable category picker ---------------- */
+
+  function renderCatList(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const ul = $('catList');
+    ul.innerHTML = '';
+    const matches = categories.filter(c => !q || c.toLowerCase().includes(q));
+    if (!matches.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No match — try fewer letters.';
+      ul.appendChild(li);
+      return;
+    }
+    matches.forEach(c => {
+      const li = document.createElement('li');
+      li.textContent = c;
+      li.setAttribute('role', 'option');
+      if (c === selectedCategory) li.className = 'selected';
+      li.addEventListener('click', () => pickCategory(c));
+      ul.appendChild(li);
+    });
+  }
+
+  function openPicker() {
+    $('catOverlay').classList.add('open');
+    $('catSearch').value = '';
+    renderCatList();
+    // Don't autofocus on touch devices: the keyboard would cover the list.
+    if (matchMedia('(hover: hover)').matches) $('catSearch').focus();
+  }
+
+  function closePicker() {
+    $('catOverlay').classList.remove('open');
+  }
+
+  function pickCategory(c) {
+    selectedCategory = c;
+    const v = $('catValue');
+    v.textContent = c;
+    v.className = '';
+    closePicker();
+  }
+
+  $('catBtn').addEventListener('click', openPicker);
+  $('catSearch').addEventListener('input', e => renderCatList(e.target.value));
+  $('catOverlay').addEventListener('click', e => {
+    if (e.target === $('catOverlay')) closePicker();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePicker();
+  });
+
+  /* ---------------- photo handling ---------------- */
 
   /* Downscale big phone photos before upload so saves stay fast on mobile data. */
   function resizeImage(file) {
@@ -162,6 +282,8 @@
     }
   });
 
+  /* ---------------- save ---------------- */
+
   function show(kind, text) {
     const m = $('msg');
     m.className = 'msg ' + kind;
@@ -169,8 +291,8 @@
   }
 
   $('save').addEventListener('click', async () => {
-    if (!$('category').value) { show('err', 'Pick a category before saving.'); return; }
-    if (!$('amount').value)   { show('err', 'Enter the purchase amount.'); return; }
+    if (!selectedCategory) { show('err', 'Pick a category before saving.'); return; }
+    if (!$('amount').value) { show('err', 'Enter the purchase amount.'); return; }
 
     $('save').disabled = true;
     show('ok', photoData ? 'Uploading photo and saving…' : 'Saving…');
@@ -183,7 +305,7 @@
         body: JSON.stringify({
           date: $('date').value,
           amount: $('amount').value,
-          category: $('category').value,
+          category: selectedCategory,
           description: $('description').value,
           photo: photoData
         })
@@ -197,6 +319,10 @@
       $('photo').value = '';
       $('preview').style.display = 'none';
       photoData = null;
+      selectedCategory = '';
+      const v = $('catValue');
+      v.textContent = 'Select a category';
+      v.className = 'placeholder';
     } catch (err) {
       show('err', 'Network error: ' + (err.message || err));
     } finally {
