@@ -11,129 +11,507 @@
     --muted: #6b7566;
     --line: #d8ddd2;
     --field: #ffffff;
-    --paper: #f3f4ef;
+    --paper: #eef0ea;
     --green: #274e13;
+    --green-soft: #e6f0e0;
     --alert: #9b2c1f;
+    --alert-soft: #f7e3e0;
+    --radius: 14px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
-    padding: 24px 16px calc(48px + env(safe-area-inset-bottom));
-    background: var(--paper); color: var(--ink);
-    font: 16px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100dvh;
   }
-  .wrap { max-width: 520px; margin: 0 auto; }
-  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
-  .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
-  label { display: block; margin: 16px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
-  input, select, textarea, button {
-    font: inherit; width: 100%;
-    padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px;
-    background: var(--field); color: var(--ink);
-    /* 16px+ keeps iOS Safari from zooming in on focus */
-    font-size: 16px;
+  .shell {
+    max-width: 520px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
   }
-  textarea { min-height: 78px; resize: vertical; }
-  input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
-  input[type=file] { padding: 8px; }
-  #preview { display: none; margin-top: 10px; width: 100%; max-height: 220px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-  button.primary {
-    margin-top: 24px; background: var(--green); color: #fff; border-color: var(--green);
-    font-weight: 600; cursor: pointer; padding: 14px; min-height: 48px;
+  .top {
+    padding: 18px 20px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
   }
-  button.primary:disabled { opacity: .6; cursor: default; }
-  .msg { margin-top: 14px; font-size: 14px; padding: 10px 12px; border-radius: 8px; display: none; word-break: break-word; }
-  .msg.ok { display: block; background: #e6f0e0; color: var(--green); }
-  .msg.err { display: block; background: #f7e3e0; color: var(--alert); }
-  .banner { display: none; margin: 0 0 20px; padding: 10px 12px; border-radius: 8px; background: #fdf3d7; color: #7a5a00; font-size: 14px; }
+  .top h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .count.on { opacity: 1; color: var(--green); }
 
-  /* --- searchable category picker --- */
-  .cat-btn {
-    text-align: left; cursor: pointer;
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    min-height: 48px;
+  .form {
+    flex: 1;
+    padding: 4px 16px calc(96px + var(--safe-b));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
-  .cat-btn .placeholder { color: var(--muted); }
-  .cat-btn .chev { flex: none; color: var(--muted); font-size: 13px; }
-  .cat-overlay {
-    position: fixed; inset: 0; z-index: 50;
-    background: rgba(28, 33, 24, .45);
+
+  .field {
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 14px 12px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .field:focus-within {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(39, 78, 19, .12);
+  }
+  .field.shake { animation: shake .35s ease; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .field input,
+  .field textarea {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 17px;
+    color: var(--ink);
+    padding: 0;
+    margin: 0;
+  }
+  .field textarea {
+    min-height: 56px;
+    resize: none;
+    line-height: 1.35;
+  }
+  .amount-row {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  .amount-row .dollar {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .amount-row input {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cat-btn {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    font-size: 17px;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 28px;
+  }
+  .cat-btn .placeholder { color: #9aa193; }
+  .cat-btn .chev {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--paper);
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+  }
+
+  .photo-card {
+    position: relative;
+    border: 1.5px dashed #c5cbbd;
+    border-radius: var(--radius);
+    background: var(--field);
+    min-height: 120px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .photo-card:active { background: #f7f8f4; }
+  .photo-card.has {
+    border-style: solid;
+    border-color: var(--line);
+    min-height: 160px;
+  }
+  .photo-card input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    font-size: 0;
+  }
+  .photo-empty {
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 28px 16px;
+    color: var(--muted);
+  }
+  .photo-empty .cam {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--green-soft);
+    color: var(--green);
+    display: grid;
+    place-items: center;
+  }
+  .photo-empty .cam svg { width: 22px; height: 22px; }
+  .photo-empty span { font-size: 15px; font-weight: 600; color: var(--ink); }
+  #preview {
+    display: none;
+    width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    pointer-events: none;
+  }
+  .photo-card.has #preview { display: block; }
+  .photo-card.has .photo-empty { display: none; }
+  .photo-clear {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(28, 33, 24, .72);
+    color: #fff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .photo-card.has .photo-clear { display: grid; place-items: center; }
+
+  .dock {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 40;
+    padding: 12px 16px calc(12px + var(--safe-b));
+    background: linear-gradient(to top, var(--paper) 70%, transparent);
+    pointer-events: none;
+  }
+  .dock-inner {
+    max-width: 520px;
+    margin: 0 auto;
+    pointer-events: auto;
+  }
+  #save {
+    width: 100%;
+    border: 0;
+    border-radius: 16px;
+    background: var(--green);
+    color: #fff;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 700;
+    min-height: 54px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 8px 24px rgba(39, 78, 19, .28);
+    transition: transform .12s, opacity .15s, background .15s;
+  }
+  #save:active:not(:disabled) { transform: scale(.98); }
+  #save:disabled { opacity: .55; cursor: default; box-shadow: none; }
+  #save.busy { letter-spacing: 0; }
+  .spin {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
     display: none;
   }
-  .cat-overlay.open { display: flex; align-items: flex-end; justify-content: center; }
+  #save.busy .spin { display: block; }
+  #save.busy .save-label { opacity: .9; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* success flash overlay */
+  .flash {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(39, 78, 19, .92);
+    color: #fff;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease;
+  }
+  .flash.on {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .flash-card {
+    text-align: center;
+    transform: scale(.92);
+    transition: transform .22s cubic-bezier(.2, .9, .2, 1.2);
+  }
+  .flash.on .flash-card { transform: scale(1); }
+  .flash-check {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    background: #fff;
+    color: var(--green);
+    display: grid;
+    place-items: center;
+  }
+  .flash-check svg { width: 36px; height: 36px; }
+  .flash-card strong {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .toast {
+    position: fixed;
+    left: 16px; right: 16px;
+    bottom: calc(78px + var(--safe-b));
+    z-index: 45;
+    max-width: 488px;
+    margin: 0 auto;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: var(--alert);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity .18s, transform .18s;
+  }
+  .toast.on {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* category sheet */
+  .cat-overlay {
+    position: fixed; inset: 0; z-index: 60;
+    background: rgba(28, 33, 24, .45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s;
+  }
+  .cat-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .cat-panel {
-    background: var(--paper);
-    width: 100%; max-width: 520px;
-    max-height: 80vh; max-height: 80dvh;
-    border-radius: 16px 16px 0 0;
-    display: flex; flex-direction: column;
-    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    background: #fff;
+    width: 100%;
+    max-width: 520px;
+    max-height: 78dvh;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px calc(12px + var(--safe-b));
+    transform: translateY(100%);
+    transition: transform .26s cubic-bezier(.2, .8, .2, 1);
   }
+  .cat-overlay.open .cat-panel { transform: translateY(0); }
   @media (min-width: 600px) {
-    .cat-overlay.open { align-items: center; padding: 24px; }
-    .cat-panel { border-radius: 16px; max-height: 70vh; }
+    .cat-overlay { align-items: center; padding: 24px; }
+    .cat-panel {
+      border-radius: 20px;
+      max-height: 70vh;
+      transform: translateY(12px) scale(.98);
+    }
+    .cat-overlay.open .cat-panel { transform: none; }
   }
-  .cat-panel .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 10px; }
-  .cat-panel input[type=search] { margin-bottom: 8px; -webkit-appearance: none; appearance: none; }
-  .cat-list { overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0; padding: 0; list-style: none; flex: 1; }
+  .cat-panel .grab {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: #d5dacd; margin: 2px auto 12px;
+  }
+  .cat-panel input[type=search] {
+    width: 100%;
+    font: inherit;
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper);
+    margin-bottom: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .cat-panel input[type=search]:focus {
+    outline: 2px solid var(--green);
+    outline-offset: 1px;
+    border-color: var(--green);
+  }
+  .cat-list {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0; padding: 0;
+    list-style: none;
+    flex: 1;
+  }
   .cat-list li {
-    padding: 13px 12px; border-radius: 8px; cursor: pointer;
-    border-bottom: 1px solid var(--line);
+    padding: 14px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
   }
-  .cat-list li:last-child { border-bottom: none; }
-  .cat-list li:active, .cat-list li:hover { background: #e6f0e0; }
-  .cat-list li.selected { background: var(--green); color: #fff; }
-  .cat-list .empty { color: var(--muted); cursor: default; }
-  .cat-list .empty:hover, .cat-list .empty:active { background: none; }
+  .cat-list li:active { background: var(--green-soft); }
+  .cat-list li.selected {
+    background: var(--green);
+    color: #fff;
+    font-weight: 600;
+  }
+  .cat-list .empty {
+    color: var(--muted);
+    cursor: default;
+    text-align: center;
+    padding: 24px;
+  }
+  .cat-list .empty:active { background: none; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Add a receipt</h1>
-  <p class="sub">Logs to the Barides Receipt List. Photos are stored in R2 and linked in the row.</p>
-  <div id="banner" class="banner"></div>
+<div class="shell">
+  <div class="top">
+    <h1>Receipt</h1>
+    <div id="count" class="count">0 saved</div>
+  </div>
 
-  <label for="date">Date of purchase</label>
-  <input id="date" type="date">
+  <div class="form" id="form">
+    <div class="field" id="fieldDate">
+      <label for="date">Date</label>
+      <input id="date" type="date">
+    </div>
 
-  <label for="amount">Purchase amount</label>
-  <input id="amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00">
+    <div class="field" id="fieldAmount">
+      <label for="amount">Amount</label>
+      <div class="amount-row">
+        <span class="dollar">$</span>
+        <input id="amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00">
+      </div>
+    </div>
 
-  <label id="categoryLabel">Category</label>
-  <button id="catBtn" class="cat-btn" type="button" aria-haspopup="listbox" aria-labelledby="categoryLabel">
-    <span id="catValue" class="placeholder">Select a category</span>
-    <span class="chev">&#9660;</span>
-  </button>
+    <div class="field" id="fieldCategory">
+      <label id="categoryLabel">Category</label>
+      <button id="catBtn" class="cat-btn" type="button" aria-haspopup="listbox" aria-labelledby="categoryLabel">
+        <span id="catValue" class="placeholder">Choose…</span>
+        <span class="chev">&#9660;</span>
+      </button>
+    </div>
 
-  <label for="description">Description</label>
-  <textarea id="description" placeholder="What was bought, and where"></textarea>
+    <div class="field" id="fieldDesc">
+      <label for="description">Note</label>
+      <textarea id="description" rows="2" placeholder="Optional"></textarea>
+    </div>
 
-  <label for="photo">Receipt photo</label>
-  <input id="photo" type="file" accept="image/*" capture="environment">
-  <img id="preview" alt="Receipt preview">
-
-  <button id="save" class="primary">Save receipt</button>
-  <div id="msg" class="msg"></div>
+    <div class="photo-card" id="photoCard">
+      <button type="button" class="photo-clear" id="photoClear" aria-label="Remove photo">&times;</button>
+      <div class="photo-empty">
+        <div class="cam">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </div>
+        <span>Add photo</span>
+      </div>
+      <img id="preview" alt="">
+      <input id="photo" type="file" accept="image/*" capture="environment">
+    </div>
+  </div>
 </div>
 
-<!-- category picker sheet -->
+<div class="dock">
+  <div class="dock-inner">
+    <button id="save" type="button">
+      <span class="spin" aria-hidden="true"></span>
+      <span class="save-label">Save</span>
+    </button>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<div id="flash" class="flash" aria-live="polite">
+  <div class="flash-card">
+    <div class="flash-check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <strong>Saved</strong>
+  </div>
+</div>
+
 <div id="catOverlay" class="cat-overlay">
   <div class="cat-panel" role="listbox" aria-label="Categories">
     <div class="grab"></div>
-    <input id="catSearch" type="search" placeholder="Search categories&hellip;" autocomplete="off">
+    <input id="catSearch" type="search" placeholder="Search" autocomplete="off" enterkeyhint="search">
     <ul id="catList" class="cat-list"></ul>
   </div>
 </div>
 
 <script>
-  /**
-   * Apps Script web-app URL (Deploy > Manage deployments > Web app).
-   * Must end in /exec and be deployed with access: "Anyone".
-   */
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwuk3OSacQ4-7eAQ5YfUDTfxZikvGcAwgSax5Z6iUOV5_OLY8EO1onLgmsdqrBFGacKhw/exec';
 
-  /* Fallback list, used only if the API can't be reached or is on an old version. */
   const FALLBACK_CATEGORIES = [
     'Restaurants', 'Takeout', 'Groceries (above normal spending)', 'Food delivery fees',
     'Uber, Lyft, or taxis',
@@ -158,22 +536,79 @@
   let photoData = null;
   let categories = FALLBACK_CATEGORIES;
   let selectedCategory = '';
+  let savedCount = 0;
+  let toastTimer = null;
 
   $('date').value = new Date().toISOString().slice(0, 10);
 
   fetch(SCRIPT_URL + '?action=categories')
     .then(r => r.json())
     .then(data => {
-      // Old deployments may still return the "Group — Name" style; strip the prefix.
       if (data.ok && data.categories && data.categories.length) {
         categories = data.categories.map(c => c.split('—').pop().trim());
       }
     })
-    .catch(() => { /* fallback list already in place */ })
+    .catch(() => {})
     .finally(renderCatList);
 
-  /* ---------------- searchable category picker ---------------- */
+  function bumpCount() {
+    savedCount += 1;
+    const el = $('count');
+    el.textContent = savedCount + ' saved';
+    el.classList.add('on');
+  }
 
+  function shake(id) {
+    const el = $(id);
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+  }
+
+  function toast(text) {
+    const t = $('toast');
+    t.textContent = text;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+  }
+
+  function buzz() {
+    try { if (navigator.vibrate) navigator.vibrate(30); } catch (_) {}
+  }
+
+  function flashSuccess() {
+    return new Promise(resolve => {
+      const f = $('flash');
+      f.classList.add('on');
+      buzz();
+      setTimeout(() => {
+        f.classList.remove('on');
+        resolve();
+      }, 700);
+    });
+  }
+
+  function resetForm() {
+    $('amount').value = '';
+    $('description').value = '';
+    clearPhoto();
+    selectedCategory = '';
+    const v = $('catValue');
+    v.textContent = 'Choose…';
+    v.className = 'placeholder';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => $('amount').focus(), 320);
+  }
+
+  function clearPhoto() {
+    photoData = null;
+    $('photo').value = '';
+    $('preview').removeAttribute('src');
+    $('photoCard').classList.remove('has');
+  }
+
+  /* ---- category picker ---- */
   function renderCatList(filter) {
     const q = (filter || '').trim().toLowerCase();
     const ul = $('catList');
@@ -182,7 +617,7 @@
     if (!matches.length) {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'No match — try fewer letters.';
+      li.textContent = 'No match';
       ul.appendChild(li);
       return;
     }
@@ -200,7 +635,6 @@
     $('catOverlay').classList.add('open');
     $('catSearch').value = '';
     renderCatList();
-    // Don't autofocus on touch devices: the keyboard would cover the list.
     if (matchMedia('(hover: hover)').matches) $('catSearch').focus();
   }
 
@@ -225,9 +659,7 @@
     if (e.key === 'Escape') closePicker();
   });
 
-  /* ---------------- photo handling ---------------- */
-
-  /* Downscale big phone photos before upload so saves stay fast on mobile data. */
+  /* ---- photo ---- */
   function resizeImage(file) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -259,15 +691,13 @@
 
   $('photo').addEventListener('change', async e => {
     const file = e.target.files[0];
-    photoData = null;
-    if (!file) { $('preview').style.display = 'none'; return; }
+    if (!file) { clearPhoto(); return; }
     try {
       const resized = await resizeImage(file);
       photoData = { base64: resized.base64, name: resized.name, mimeType: resized.mimeType };
       $('preview').src = resized.dataUrl;
-      $('preview').style.display = 'block';
+      $('photoCard').classList.add('has');
     } catch (err) {
-      // HEIC or other formats a canvas can't decode: send the original file as-is.
       const reader = new FileReader();
       reader.onload = () => {
         photoData = {
@@ -276,29 +706,39 @@
           mimeType: file.type || 'image/jpeg'
         };
         $('preview').src = reader.result;
-        $('preview').style.display = 'block';
+        $('photoCard').classList.add('has');
       };
       reader.readAsDataURL(file);
     }
   });
 
-  /* ---------------- save ---------------- */
+  $('photoClear').addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    clearPhoto();
+  });
 
-  function show(kind, text) {
-    const m = $('msg');
-    m.className = 'msg ' + kind;
-    m.textContent = text;
-  }
-
+  /* ---- save ---- */
   $('save').addEventListener('click', async () => {
-    if (!selectedCategory) { show('err', 'Pick a category before saving.'); return; }
-    if (!$('amount').value) { show('err', 'Enter the purchase amount.'); return; }
+    if (!$('amount').value) {
+      shake('fieldAmount');
+      toast('Enter an amount');
+      $('amount').focus();
+      return;
+    }
+    if (!selectedCategory) {
+      shake('fieldCategory');
+      toast('Pick a category');
+      openPicker();
+      return;
+    }
 
-    $('save').disabled = true;
-    show('ok', photoData ? 'Uploading photo and saving…' : 'Saving…');
+    const btn = $('save');
+    btn.disabled = true;
+    btn.classList.add('busy');
+    btn.querySelector('.save-label').textContent = 'Saving…';
 
     try {
-      /* text/plain body avoids a CORS preflight, which Apps Script can't answer. */
       const res = await fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -311,22 +751,20 @@
         })
       });
       const data = await res.json();
-      if (!data.ok) { show('err', data.error || 'Save failed.'); return; }
+      if (!data.ok) {
+        toast(data.error || 'Save failed');
+        return;
+      }
 
-      show('ok', 'Saved ' + data.id + (data.photoUrl ? ' with photo.' : '.'));
-      $('amount').value = '';
-      $('description').value = '';
-      $('photo').value = '';
-      $('preview').style.display = 'none';
-      photoData = null;
-      selectedCategory = '';
-      const v = $('catValue');
-      v.textContent = 'Select a category';
-      v.className = 'placeholder';
+      bumpCount();
+      await flashSuccess();
+      resetForm();
     } catch (err) {
-      show('err', 'Network error: ' + (err.message || err));
+      toast('Couldn’t save — try again');
     } finally {
-      $('save').disabled = false;
+      btn.disabled = false;
+      btn.classList.remove('busy');
+      btn.querySelector('.save-label').textContent = 'Save';
     }
   });
 </script>
