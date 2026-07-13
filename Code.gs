@@ -1,9 +1,17 @@
 /**
  * Barides Receipt List — fire claim receipt tracker
  *
- * 1) Set the script properties (see setR2Credentials note at the bottom)
- * 2) Run setup() once
- * 3) Deploy > New deployment > Web app  (Execute as: Me, Access: anyone with link)
+ * How to deploy:
+ * 1) Paste this file into the Apps Script project bound to your sheet.
+ * 2) Fill in and run setR2Credentials() once, then delete the values from the source.
+ * 3) Run setup() once.
+ * 4) Deploy > New deployment > Web app  (Execute as: Me, Access: Anyone).
+ * 5) Copy the /exec URL and paste it into SCRIPT_URL at the top of index.html
+ *    (the form hosted on GitHub Pages).
+ *
+ * The GitHub Pages form talks to this script via fetch():
+ *   GET  ?action=categories  -> JSON list of categories
+ *   POST (JSON body)         -> appends a row, uploads photo to R2
  */
 
 const SHEET_NAME  = 'Sheet1';   // the tab holding the receipts
@@ -88,14 +96,19 @@ const CATEGORIES = [
 
 function setup() {
   const ss = SpreadsheetApp.getActive();
+  const warnings = [];
 
   // Receipts tab
   const sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
-  sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-  sh.getRange(1, 1, 1, HEADERS.length)
-    .setFontWeight('bold')
-    .setFontColor('#ffffff')
-    .setBackground('#274e13');
+  try {
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sh.getRange(1, 1, 1, HEADERS.length)
+      .setFontWeight('bold')
+      .setFontColor('#ffffff')
+      .setBackground('#274e13');
+  } catch (e) {
+    warnings.push('headers (' + e.message + ')');
+  }
   sh.setFrozenRows(1);
   sh.setColumnWidth(1, 220); // id
   sh.setColumnWidth(2, 130); // date
@@ -104,9 +117,16 @@ function setup() {
   sh.setColumnWidth(5, 320); // category
   sh.setColumnWidth(6, 130); // amount
 
+  // If the sheet was converted to a Table (typed columns), Sheets refuses
+  // setNumberFormat / setDataValidation. Typed columns already format dates
+  // and currency themselves, so we skip instead of crashing.
   const last = sh.getMaxRows() - 1;
-  sh.getRange(2, 2, last, 1).setNumberFormat('yyyy-mm-dd');       // Date of purchase
-  sh.getRange(2, 6, last, 1).setNumberFormat('$#,##0.00');        // Purchase Amount
+  try {
+    sh.getRange(2, 2, last, 1).setNumberFormat('yyyy-mm-dd');   // Date of purchase
+    sh.getRange(2, 6, last, 1).setNumberFormat('$#,##0.00');    // Purchase Amount
+  } catch (e) {
+    warnings.push('number formats (typed/table columns handle this themselves)');
+  }
 
   // Hidden list tab (a range beats an inline list — no length limits, easy to edit)
   const lists = ss.getSheetByName(LISTS_SHEET) || ss.insertSheet(LISTS_SHEET);
@@ -116,34 +136,65 @@ function setup() {
        .setValues(CATEGORIES.map(c => [c]));
   lists.hideSheet();
 
-  const source = lists.getRange(2, 1, CATEGORIES.length, 1);
-  const rule = SpreadsheetApp.newDataValidation()
-    .requireValueInRange(source, true)
-    .setAllowInvalid(false)
-    .setHelpText('Pick a category from the list.')
-    .build();
-  sh.getRange(2, 5, last, 1).setDataValidation(rule);
+  try {
+    const source = lists.getRange(2, 1, CATEGORIES.length, 1);
+    const rule = SpreadsheetApp.newDataValidation()
+      .requireValueInRange(source, true)
+      .setAllowInvalid(false)
+      .setHelpText('Pick a category from the list.')
+      .build();
+    sh.getRange(2, 5, last, 1).setDataValidation(rule);
+  } catch (e) {
+    warnings.push('category dropdown (typed/table column blocked it)');
+  }
 
   ss.setActiveSheet(sh);
-  SpreadsheetApp.getActive().toast('Setup complete — ' + CATEGORIES.length + ' categories loaded.');
+  const note = warnings.length
+    ? 'Setup done with skips: ' + warnings.join('; ') +
+      '. To restore full formatting, right-click the table name on Sheet1 and choose "Convert to unformatted range", then rerun setup().'
+    : 'Setup complete — ' + CATEGORIES.length + ' categories loaded.';
+  SpreadsheetApp.getActive().toast(note, 'Setup', 10);
+  Logger.log(note);
 }
 
-/* ------------------------------------------------------------- web app UI */
+/* -------------------------------------------------------------- JSON API */
 
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Form')
-    .setTitle('Add a receipt')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-/** Called by the form on load. */
-function getCategories() {
-  return CATEGORIES;
+/**
+ * GET endpoint used by the GitHub Pages form.
+ *   ?action=categories -> { ok, categories: [...] }
+ *   anything else      -> { ok, status } health check
+ */
+function doGet(e) {
+  const action = e && e.parameter && e.parameter.action;
+  if (action === 'categories') {
+    return json_({ ok: true, categories: CATEGORIES });
+  }
+  return json_({ ok: true, status: 'Barides receipt API is running.' });
 }
 
 /**
- * Called by the form on submit.
- * payload = { date, description, category, amount, photo: { base64, name, mimeType } | null }
+ * POST endpoint used by the GitHub Pages form.
+ * Body is a JSON string (sent as text/plain to avoid a CORS preflight):
+ *   { date, description, category, amount, photo: { base64, name, mimeType } | null }
+ */
+function doPost(e) {
+  let payload;
+  try {
+    payload = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return json_({ ok: false, error: 'Bad request: body must be JSON.' });
+  }
+  return json_(addReceipt(payload));
+}
+
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Appends one receipt row (and uploads the photo to R2 if present).
+ * Returns { ok, id, photoUrl } or { ok: false, error }.
  */
 function addReceipt(payload) {
   const lock = LockService.getScriptLock();
@@ -158,15 +209,14 @@ function addReceipt(payload) {
     }
 
     const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_NAME);
-    const row = sh.getLastRow() + 1;
-    sh.getRange(row, 1, 1, 6).setValues([[
+    sh.appendRow([
       id,
       payload.date ? new Date(payload.date + 'T12:00:00') : new Date(),
       photoUrl,
       payload.description || '',
       payload.category || '',
       Number(payload.amount) || 0
-    ]]);
+    ]);
 
     return { ok: true, id: id, photoUrl: photoUrl };
   } catch (err) {

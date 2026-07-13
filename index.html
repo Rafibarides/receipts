@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#274e13">
+<title>Add a receipt</title>
+<style>
+  :root {
+    --ink: #1c2118;
+    --muted: #6b7566;
+    --line: #d8ddd2;
+    --field: #ffffff;
+    --paper: #f3f4ef;
+    --green: #274e13;
+    --alert: #9b2c1f;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    padding: 24px 16px calc(48px + env(safe-area-inset-bottom));
+    background: var(--paper); color: var(--ink);
+    font: 16px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+  label { display: block; margin: 16px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); }
+  input, select, textarea, button {
+    font: inherit; width: 100%;
+    padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--field); color: var(--ink);
+    /* 16px+ keeps iOS Safari from zooming in on focus */
+    font-size: 16px;
+  }
+  textarea { min-height: 78px; resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); outline-offset: 1px; border-color: var(--green); }
+  input[type=file] { padding: 8px; }
+  #preview { display: none; margin-top: 10px; width: 100%; max-height: 220px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  button.primary {
+    margin-top: 24px; background: var(--green); color: #fff; border-color: var(--green);
+    font-weight: 600; cursor: pointer; padding: 14px; min-height: 48px;
+  }
+  button.primary:disabled { opacity: .6; cursor: default; }
+  .msg { margin-top: 14px; font-size: 14px; padding: 10px 12px; border-radius: 8px; display: none; word-break: break-word; }
+  .msg.ok { display: block; background: #e6f0e0; color: var(--green); }
+  .msg.err { display: block; background: #f7e3e0; color: var(--alert); }
+  .banner { display: none; margin: 0 0 20px; padding: 10px 12px; border-radius: 8px; background: #fdf3d7; color: #7a5a00; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Add a receipt</h1>
+  <p class="sub">Logs to the Barides Receipt List. Photos are stored in R2 and linked in the row.</p>
+  <div id="banner" class="banner"></div>
+
+  <label for="date">Date of purchase</label>
+  <input id="date" type="date">
+
+  <label for="amount">Purchase amount</label>
+  <input id="amount" type="number" step="0.01" min="0" inputmode="decimal" placeholder="0.00">
+
+  <label for="category">Category</label>
+  <select id="category"><option value="">Select a category</option></select>
+
+  <label for="description">Description</label>
+  <textarea id="description" placeholder="What was bought, and where"></textarea>
+
+  <label for="photo">Receipt photo</label>
+  <input id="photo" type="file" accept="image/*" capture="environment">
+  <img id="preview" alt="Receipt preview">
+
+  <button id="save" class="primary">Save receipt</button>
+  <div id="msg" class="msg"></div>
+</div>
+
+<script>
+  /**
+   * Paste your Apps Script web-app URL here (Deploy > Manage deployments > Web app).
+   * It must end in /exec and be deployed with access: "Anyone".
+   */
+  const SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_EXEC_URL_HERE';
+
+  const $ = id => document.getElementById(id);
+  let photoData = null;
+
+  $('date').value = new Date().toISOString().slice(0, 10);
+
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(SCRIPT_URL)) {
+    const b = $('banner');
+    b.style.display = 'block';
+    b.textContent = 'Not connected yet: paste your Apps Script /exec URL into SCRIPT_URL in index.html.';
+  }
+
+  /* Categories come from the Apps Script API so the sheet and the form always match. */
+  fetch(SCRIPT_URL + '?action=categories')
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'Bad response');
+      const sel = $('category');
+      data.categories.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        sel.appendChild(o);
+      });
+    })
+    .catch(() => show('err', 'Could not load categories. Check SCRIPT_URL and that the web app is deployed with access "Anyone".'));
+
+  /* Downscale big phone photos before upload so saves stay fast on mobile data. */
+  function resizeImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1600;
+        let { width, height } = img;
+        if (Math.max(width, height) > MAX) {
+          const scale = MAX / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve({
+          base64: dataUrl.split(',')[1],
+          name: (file.name || 'receipt').replace(/\.[^.]+$/, '') + '.jpg',
+          mimeType: 'image/jpeg',
+          dataUrl: dataUrl
+        });
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  $('photo').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    photoData = null;
+    if (!file) { $('preview').style.display = 'none'; return; }
+    try {
+      const resized = await resizeImage(file);
+      photoData = { base64: resized.base64, name: resized.name, mimeType: resized.mimeType };
+      $('preview').src = resized.dataUrl;
+      $('preview').style.display = 'block';
+    } catch (err) {
+      // HEIC or other formats a canvas can't decode: send the original file as-is.
+      const reader = new FileReader();
+      reader.onload = () => {
+        photoData = {
+          base64: reader.result.split(',')[1],
+          name: file.name,
+          mimeType: file.type || 'image/jpeg'
+        };
+        $('preview').src = reader.result;
+        $('preview').style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  function show(kind, text) {
+    const m = $('msg');
+    m.className = 'msg ' + kind;
+    m.textContent = text;
+  }
+
+  $('save').addEventListener('click', async () => {
+    if (!$('category').value) { show('err', 'Pick a category before saving.'); return; }
+    if (!$('amount').value)   { show('err', 'Enter the purchase amount.'); return; }
+
+    $('save').disabled = true;
+    show('ok', photoData ? 'Uploading photo and saving…' : 'Saving…');
+
+    try {
+      /* text/plain body avoids a CORS preflight, which Apps Script can't answer. */
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          date: $('date').value,
+          amount: $('amount').value,
+          category: $('category').value,
+          description: $('description').value,
+          photo: photoData
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) { show('err', data.error || 'Save failed.'); return; }
+
+      show('ok', 'Saved ' + data.id + (data.photoUrl ? ' with photo.' : '.'));
+      $('amount').value = '';
+      $('description').value = '';
+      $('photo').value = '';
+      $('preview').style.display = 'none';
+      photoData = null;
+    } catch (err) {
+      show('err', 'Network error: ' + (err.message || err));
+    } finally {
+      $('save').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
