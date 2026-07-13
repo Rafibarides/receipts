@@ -333,9 +333,9 @@ function hex_(bytes) {
  */
 function setR2Credentials() {
   PropertiesService.getScriptProperties().setProperties({
-    R2_ACCOUNT_ID: 'your-account-id',
-    R2_BUCKET: 'your-bucket-name',
-    R2_ACCESS_KEY_ID: 'your-access-key-id',
-    R2_SECRET_ACCESS_KEY: 'your-secret-access-key'
+    R2_ACCOUNT_ID: '0fea8e8ab12c60b7b8584c14ff322469',
+    R2_BUCKET: 'fire-reimbursement',
+    R2_ACCESS_KEY_ID: 'PASTE_ACCESS_KEY_ID',        // from the API token you create
+    R2_SECRET_ACCESS_KEY: 'PASTE_SECRET_ACCESS_KEY' // from the API token you create
   });
 }
